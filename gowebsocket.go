@@ -96,18 +96,18 @@ func (socket *Socket) DoConnect() (err error) {
 	}
 
 	logger.Info.Println("Connected to server")
+	socket.IsConnected = true
 	return
 }
 
 func (socket *Socket) Connect() {
 	err := socket.DoConnect()
-	
+
 	if err != nil {
 		return
 	}
 
 	if socket.OnConnected != nil {
-		socket.IsConnected = true
 		socket.OnConnected(*socket)
 	}
 
