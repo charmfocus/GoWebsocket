@@ -27,22 +27,23 @@ func (socket Socket) GetLogger() logging.Logger {
 }
 
 type Socket struct {
-	Conn              *websocket.Conn
-	WebsocketDialer   *websocket.Dialer
-	Url               string
-	ConnectionOptions ConnectionOptions
-	RequestHeader     http.Header
-	OnConnected       func(socket Socket)
-	OnTextMessage     func(message string, socket Socket)
-	OnBinaryMessage   func(data []byte, socket Socket)
-	OnConnectError    func(err error, socket Socket)
-	OnDisconnected    func(err error, socket Socket)
-	OnPingReceived    func(data string, socket Socket)
-	OnPongReceived    func(data string, socket Socket)
-	IsConnected       bool
-	Timeout           time.Duration
-	sendMu            *sync.Mutex // Prevent "concurrent write to websocket connection"
-	receiveMu         *sync.Mutex
+	Conn                *websocket.Conn
+	WebsocketDialer     *websocket.Dialer
+	Url                 string
+	ConnectionOptions   ConnectionOptions
+	ReconnectionOptions ReconnectionOptions
+	RequestHeader       http.Header
+	OnConnected         func(socket Socket)
+	OnTextMessage       func(message string, socket Socket)
+	OnBinaryMessage     func(data []byte, socket Socket)
+	OnConnectError      func(err error, socket Socket)
+	OnDisconnected      func(err error, socket Socket)
+	OnPingReceived      func(data string, socket Socket)
+	OnPongReceived      func(data string, socket Socket)
+	IsConnected         bool
+	Timeout             time.Duration
+	sendMu              *sync.Mutex // Prevent "concurrent write to websocket connection"
+	receiveMu           *sync.Mutex
 }
 
 type ConnectionOptions struct {
@@ -54,6 +55,8 @@ type ConnectionOptions struct {
 
 // todo Yet to be done
 type ReconnectionOptions struct {
+	Times    int
+	Interval time.Duration
 }
 
 func New(url string) Socket {
@@ -64,10 +67,11 @@ func New(url string) Socket {
 			UseCompression: false,
 			UseSSL:         true,
 		},
-		WebsocketDialer: &websocket.Dialer{},
-		Timeout:         0,
-		sendMu:          &sync.Mutex{},
-		receiveMu:       &sync.Mutex{},
+		ReconnectionOptions: ReconnectionOptions{Times: 0, Interval: 1 * time.Second},
+		WebsocketDialer:     &websocket.Dialer{},
+		Timeout:             0,
+		sendMu:              &sync.Mutex{},
+		receiveMu:           &sync.Mutex{},
 	}
 }
 
@@ -97,6 +101,28 @@ func (socket *Socket) DoConnect() (err error) {
 
 	logger.Info.Println("Connected to server")
 	socket.IsConnected = true
+	return
+}
+
+func (socket *Socket) Reconnect() (err error) {
+	err = socket.close()
+	reconnectCnt := 0
+	for {
+		time.Sleep(socket.ReconnectionOptions.Interval)
+
+		reconnectCnt++
+		err = socket.DoConnect()
+
+		if socket.ReconnectionOptions.Times > 0 && reconnectCnt >= socket.ReconnectionOptions.Times {
+			break
+		}
+
+		if err != nil {
+			continue
+		}
+
+		break
+	}
 	return
 }
 
@@ -154,6 +180,7 @@ func (socket *Socket) Connect() {
 					socket.IsConnected = false
 					socket.OnDisconnected(err, *socket)
 				}
+				socket.Reconnect()
 				return
 			}
 			logger.Info.Println("recv: %s", message)
@@ -195,12 +222,17 @@ func (socket *Socket) send(messageType int, data []byte) error {
 	return err
 }
 
-func (socket *Socket) Close() {
+func (socket *Socket) close() error {
 	err := socket.send(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	if err != nil {
 		logger.Error.Println("write close:", err)
 	}
 	socket.Conn.Close()
+	return err
+}
+
+func (socket *Socket) Close() {
+	err := socket.close()
 	if socket.OnDisconnected != nil {
 		socket.IsConnected = false
 		socket.OnDisconnected(err, *socket)
