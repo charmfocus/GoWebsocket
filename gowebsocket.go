@@ -101,6 +101,9 @@ func (socket *Socket) DoConnect() (err error) {
 
 	logger.Info.Println("Connected to server")
 	socket.IsConnected = true
+	if socket.OnConnected != nil {
+		socket.OnConnected(*socket)
+	}
 	return
 }
 
@@ -132,11 +135,12 @@ func (socket *Socket) Connect() {
 	if err != nil {
 		return
 	}
+	
+	socket.bind()
+	go socket.recv()
+}
 
-	if socket.OnConnected != nil {
-		socket.OnConnected(*socket)
-	}
-
+func (socket *Socket) bind() {
 	defaultPingHandler := socket.Conn.PingHandler()
 	socket.Conn.SetPingHandler(func(appData string) error {
 		logger.Trace.Println("Received PING from server")
@@ -165,38 +169,38 @@ func (socket *Socket) Connect() {
 		}
 		return result
 	})
+}
 
-	go func() {
-		for {
-			socket.receiveMu.Lock()
-			if socket.Timeout != 0 {
-				socket.Conn.SetReadDeadline(time.Now().Add(socket.Timeout))
+func (socket *Socket) recv() {
+	for {
+		socket.receiveMu.Lock()
+		if socket.Timeout != 0 {
+			socket.Conn.SetReadDeadline(time.Now().Add(socket.Timeout))
+		}
+		messageType, message, err := socket.Conn.ReadMessage()
+		socket.receiveMu.Unlock()
+		if err != nil {
+			logger.Error.Println("read:", err)
+			if socket.OnDisconnected != nil {
+				socket.IsConnected = false
+				socket.OnDisconnected(err, *socket)
 			}
-			messageType, message, err := socket.Conn.ReadMessage()
-			socket.receiveMu.Unlock()
-			if err != nil {
-				logger.Error.Println("read:", err)
-				if socket.OnDisconnected != nil {
-					socket.IsConnected = false
-					socket.OnDisconnected(err, *socket)
-				}
-				socket.Reconnect()
-				return
-			}
-			logger.Info.Println("recv: %s", message)
+			socket.Reconnect()
+			return
+		}
+		logger.Info.Println("recv: %s", message)
 
-			switch messageType {
-			case websocket.TextMessage:
-				if socket.OnTextMessage != nil {
-					socket.OnTextMessage(string(message), *socket)
-				}
-			case websocket.BinaryMessage:
-				if socket.OnBinaryMessage != nil {
-					socket.OnBinaryMessage(message, *socket)
-				}
+		switch messageType {
+		case websocket.TextMessage:
+			if socket.OnTextMessage != nil {
+				socket.OnTextMessage(string(message), *socket)
+			}
+		case websocket.BinaryMessage:
+			if socket.OnBinaryMessage != nil {
+				socket.OnBinaryMessage(message, *socket)
 			}
 		}
-	}()
+	}
 }
 
 func (socket *Socket) SendText(message string) {
