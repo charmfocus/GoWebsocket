@@ -2,9 +2,10 @@ package main
 
 import (
 	"log"
-	"github.com/sacOO7/gowebsocket"
 	"os"
 	"os/signal"
+
+	"github.com/charmfocus/gowebsocket"
 )
 
 func main() {

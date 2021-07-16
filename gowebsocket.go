@@ -1,15 +1,16 @@
 package gowebsocket
 
 import (
-	"github.com/gorilla/websocket"
-	"net/http"
-	"errors"
 	"crypto/tls"
+	"errors"
+	"net/http"
 	"net/url"
-	"sync"
-	"github.com/sacOO7/go-logger"
 	"reflect"
+	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
+	"github.com/sacOO7/go-logger"
 )
 
 type Empty struct {
