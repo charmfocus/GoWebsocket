@@ -203,25 +203,37 @@ func (socket *Socket) recv() {
 	}
 }
 
-func (socket *Socket) SendText(message string) {
+func (socket *Socket) SendText(message string) error {
 	err := socket.send(websocket.TextMessage, []byte (message))
 	if err != nil {
 		logger.Error.Println("write:", err)
-		return
 	}
+	return err
 }
 
-func (socket *Socket) SendBinary(data []byte) {
+func (socket *Socket) SendBinary(data []byte) error {
 	err := socket.send(websocket.BinaryMessage, data)
 	if err != nil {
 		logger.Error.Println("write:", err)
-		return
 	}
+	return err
 }
 
 func (socket *Socket) send(messageType int, data []byte) error {
 	socket.sendMu.Lock()
 	err := socket.Conn.WriteMessage(messageType, data)
+	if err != nil {
+		logger.Error.Println("send:", err)
+		if socket.OnDisconnected != nil {
+			socket.IsConnected = false
+			socket.OnDisconnected(err, *socket)
+		}
+		socket.Reconnect()
+
+		if socket.IsConnected {
+			socket.Conn.WriteMessage(messageType, data)
+		}
+	}
 	socket.sendMu.Unlock()
 	return err
 }
