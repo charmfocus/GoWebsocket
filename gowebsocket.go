@@ -108,7 +108,6 @@ func (socket *Socket) DoConnect() (err error) {
 }
 
 func (socket *Socket) Reconnect() (err error) {
-	err = socket.close()
 	reconnectCnt := 0
 	for {
 		time.Sleep(socket.ReconnectionOptions.Interval)
@@ -135,7 +134,7 @@ func (socket *Socket) Connect() {
 	if err != nil {
 		return
 	}
-	
+
 	socket.bind()
 	go socket.recv()
 }
