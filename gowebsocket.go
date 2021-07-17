@@ -185,7 +185,7 @@ func (socket *Socket) recv() {
 				socket.OnDisconnected(err, *socket)
 			}
 			socket.Reconnect()
-			return
+			continue
 		}
 		logger.Info.Println("recv: %s", message)
 
