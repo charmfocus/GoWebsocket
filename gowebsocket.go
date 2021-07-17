@@ -115,6 +115,10 @@ func (socket *Socket) Reconnect() (err error) {
 		return
 	}
 
+	if socket.IsConnected {
+		return
+	}
+
 	reconnectCnt := 0
 	for {
 		time.Sleep(socket.ReconnectionOptions.Interval)
@@ -134,6 +138,8 @@ func (socket *Socket) Reconnect() (err error) {
 	}
 
 	atomic.CompareAndSwapInt32(&reconnectFlag, 1, 0)
+
+	socket.IsConnected = true
 	return
 }
 
