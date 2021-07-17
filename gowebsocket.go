@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -59,6 +60,8 @@ type ReconnectionOptions struct {
 	Interval time.Duration
 }
 
+var reconnectFlag int32 = 0
+
 func New(url string) Socket {
 	return Socket{
 		Url:           url,
@@ -108,6 +111,10 @@ func (socket *Socket) DoConnect() (err error) {
 }
 
 func (socket *Socket) Reconnect() (err error) {
+	if !atomic.CompareAndSwapInt32(&reconnectFlag, 0, 1) {
+		return
+	}
+
 	reconnectCnt := 0
 	for {
 		time.Sleep(socket.ReconnectionOptions.Interval)
@@ -125,6 +132,8 @@ func (socket *Socket) Reconnect() (err error) {
 
 		break
 	}
+
+	atomic.CompareAndSwapInt32(&reconnectFlag, 1, 0)
 	return
 }
 
